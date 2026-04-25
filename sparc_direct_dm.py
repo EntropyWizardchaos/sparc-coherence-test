@@ -98,26 +98,25 @@ def compute_fdm_outer(rotmod_dir, galaxy_info, ML_disk=0.5):
             # Vdisk in the file is for M/L = 1. Scale by sqrt(ML_disk)
             V_bar_sq = Vgas**2 + ML_disk * Vdisk**2 + Vbul**2
 
-            # f_DM at each radius
-            valid = Vobs > 10  # exclude very inner points with tiny velocities
-            if np.sum(valid) < 3:
+            # f_DM at each radius (pointwise)
+            # Use outer 25% of measured radii instead of hardcoded velocity cut
+            n_total = len(Rad)
+            if n_total < 4:
                 continue
 
-            Vobs_v = Vobs[valid]
-            V_bar_v = V_bar_sq[valid]
+            n_outer = max(3, n_total // 4)  # outer 25%, minimum 3 points
+            Vobs_outer = Vobs[-n_outer:]
+            Vbar_outer = V_bar_sq[-n_outer:]
 
-            # Average over outermost 3 points
-            n_outer = min(3, len(Vobs_v))
-            Vobs_outer = Vobs_v[-n_outer:]
-            Vbar_outer = V_bar_v[-n_outer:]
-
-            f_dm_outer = 1.0 - np.mean(Vbar_outer) / np.mean(Vobs_outer**2)
-            f_dm_outer = np.clip(f_dm_outer, 0, 1)
+            # Pointwise f_dm, then average (Option A — proper mean of fractions)
+            f_dm_per_point = 1.0 - Vbar_outer / Vobs_outer**2
+            f_dm_outer = float(np.mean(f_dm_per_point))
+            # No clipping — negative f_dm is real information about M/L assumptions
 
             # Also compute at half-radius
-            mid = len(Vobs_v) // 2
-            f_dm_mid = 1.0 - V_bar_v[mid] / Vobs_v[mid]**2
-            f_dm_mid = np.clip(f_dm_mid, 0, 1)
+            mid = n_total // 2
+            f_dm_mid = 1.0 - V_bar_sq[mid] / Vobs[mid]**2
+            # No clipping
 
             info = galaxy_info[galaxy_name_matched]
             results.append({
@@ -127,8 +126,8 @@ def compute_fdm_outer(rotmod_dir, galaxy_info, ML_disk=0.5):
                 'L36': info['L36'],
                 'f_dm_outer': f_dm_outer,
                 'f_dm_mid': f_dm_mid,
-                'R_last': Rad[valid][-1],
-                'Vobs_last': Vobs_v[-1],
+                'R_last': Rad[-1],
+                'Vobs_last': Vobs[-1],
             })
 
         except Exception as e:
